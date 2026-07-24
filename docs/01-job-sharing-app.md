@@ -1,7 +1,7 @@
 # Doc 1 — Job Sharing App & Website (Phase 1)
 
 Working name: **JobDrop**
-Status: planning, not yet implemented
+Status: **M0 built** (foundations, schema + RLS, auth, app shell). M1 next.
 Branch: `claude/job-sharing-app-emg6ye`
 
 ---
@@ -29,7 +29,10 @@ leaving the app I'm in.** If we lose that, there is no reason to use this over W
 
 ### In scope for v1
 
-- Auth (phone OTP + Google).
+- Auth (Google + Apple). Phone OTP was dropped from v1: it needs a paid SMS provider and
+  Indian DLT registration before _anyone_ can log in, whereas Google and Apple are free and
+  work day one. Apple is included because App Store review requires it once Google is
+  offered. Phone can be added later without a migration.
 - Groups: create, invite, join by link/code, leave. A user can be in many groups.
 - **Broadcast share**: one action sends a job to **all groups the user is in**. No group
   picker in the default path. (Selective targeting is v1.1 — see §12.)
@@ -59,17 +62,17 @@ leaving the app I'm in.** If we lose that, there is no reason to use this over W
 
 ### Non-goals worth naming
 
-We are not trying to beat LinkedIn at discovery. We are the layer *after* discovery. The
+We are not trying to beat LinkedIn at discovery. We are the layer _after_ discovery. The
 user has already found the job; our only job is to move it to their friends and remember
 it for them.
 
 ## 3. Users and their jobs-to-be-done
 
-| Persona | What they do | What they need |
-|---|---|---|
-| **The sharer** (the heavy user, ~20% of the group, sends 80% of jobs) | Sees 30 roles/week, shares 10 | Zero-friction capture. Must not require opening the app. |
-| **The lurker** | Shares rarely, consumes daily | Good digest, search, "is this still open?", tracking |
-| **The reciprocator** | Shares what they get asked for | Reply/react in-context, low notification noise |
+| Persona                                                               | What they do                   | What they need                                           |
+| --------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------- |
+| **The sharer** (the heavy user, ~20% of the group, sends 80% of jobs) | Sees 30 roles/week, shares 10  | Zero-friction capture. Must not require opening the app. |
+| **The lurker**                                                        | Shares rarely, consumes daily  | Good digest, search, "is this still open?", tracking     |
+| **The reciprocator**                                                  | Shares what they get asked for | Reply/react in-context, low notification noise           |
 
 Design bias: **optimize brutally for the sharer.** If sharing is not effortless the group
 starves and the lurkers churn. The reading experience can be merely good.
@@ -90,13 +93,13 @@ Dynamic Island/Live Activity, none of which is a free-floating draggable target.
 So the design is **one concept, two implementations**, and we make the iOS path feel as
 close to one gesture as the OS permits:
 
-| Surface | Android | iOS | Web |
-|---|---|---|---|
-| **Floating bubble** (drag link onto it, or long-press → paste) | ✅ Foreground service + `SYSTEM_ALERT_WINDOW` overlay. Accepts OS drag-and-drop (`DragEvent` with `ClipData`) and tap-to-paste-clipboard. | ❌ Not possible. | ❌ |
-| **Share sheet target** — "Share → JobDrop" | ✅ `ACTION_SEND` intent filter for text/image | ✅ **Share Extension** — this is the primary iOS path. Renders a 120pt sheet that has already sent by the time it appears; single "Undo" affordance. | ✅ Web Share Target API for installed PWA (Android Chrome only) |
-| **System shortcut** | ✅ Quick Settings tile, home-screen widget | ✅ **Action Button** (15 Pro+), **Back Tap** double-tap, Control Center control (iOS 18+), all via an App Intent / Shortcut that grabs the clipboard and sends | — |
-| **Clipboard assist on open** | ✅ Read clipboard on foreground, offer "Send this link?" banner | ⚠️ iOS shows a paste-permission prompt for clipboard reads. Use `UIPasteControl` — a system Paste button the user taps once, no prompt — as a big "Paste & Send" target on the home screen. | ✅ `navigator.clipboard.readText()` on user gesture |
-| **Browser** | — | — | ✅ Chrome/Edge/Firefox **extension**: right-click → "Send to JobDrop", plus `Ctrl+Shift+J` on the current tab. This is how desktop sharing should work; the PWA alone is not enough. |
+| Surface                                                        | Android                                                                                                                                   | iOS                                                                                                                                                                                         | Web                                                                                                                                                                                  |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Floating bubble** (drag link onto it, or long-press → paste) | ✅ Foreground service + `SYSTEM_ALERT_WINDOW` overlay. Accepts OS drag-and-drop (`DragEvent` with `ClipData`) and tap-to-paste-clipboard. | ❌ Not possible.                                                                                                                                                                            | ❌                                                                                                                                                                                   |
+| **Share sheet target** — "Share → JobDrop"                     | ✅ `ACTION_SEND` intent filter for text/image                                                                                             | ✅ **Share Extension** — this is the primary iOS path. Renders a 120pt sheet that has already sent by the time it appears; single "Undo" affordance.                                        | ✅ Web Share Target API for installed PWA (Android Chrome only)                                                                                                                      |
+| **System shortcut**                                            | ✅ Quick Settings tile, home-screen widget                                                                                                | ✅ **Action Button** (15 Pro+), **Back Tap** double-tap, Control Center control (iOS 18+), all via an App Intent / Shortcut that grabs the clipboard and sends                              | —                                                                                                                                                                                    |
+| **Clipboard assist on open**                                   | ✅ Read clipboard on foreground, offer "Send this link?" banner                                                                           | ⚠️ iOS shows a paste-permission prompt for clipboard reads. Use `UIPasteControl` — a system Paste button the user taps once, no prompt — as a big "Paste & Send" target on the home screen. | ✅ `navigator.clipboard.readText()` on user gesture                                                                                                                                  |
+| **Browser**                                                    | —                                                                                                                                         | —                                                                                                                                                                                           | ✅ Chrome/Edge/Firefox **extension**: right-click → "Send to JobDrop", plus `Ctrl+Shift+J` on the current tab. This is how desktop sharing should work; the PWA alone is not enough. |
 
 **The honest framing to the user:** on Android you get the bubble you described; on iOS you
 get a two-tap share-sheet flow plus a one-press Action Button/Back Tap flow, which is the
@@ -164,13 +167,13 @@ Rules that fall out of this:
 
 **Tab 1 — Feed (default).** Unified reverse-chronological stream of jobs from all groups,
 not per-group. Each row is a job card: company logo/favicon, role, company, location,
-work-mode chip, "via Ankit in *2024 Grads*", age, and a status pill. Swipe right = save,
+work-mode chip, "via Ankit in _2024 Grads_", age, and a status pill. Swipe right = save,
 swipe left = not for me. Tapping the card opens the job detail; tapping the group name
 opens that group's chat.
 
 Rationale: a per-group inbox forces the reader to visit N groups. Most people are in 2–4
-groups with heavy overlap. The feed is the honest default; groups are how you *post* and
-*discuss*, not how you *read*.
+groups with heavy overlap. The feed is the honest default; groups are how you _post_ and
+_discuss_, not how you _read_.
 
 **Tab 2 — Groups.** List of groups with unread counts. Group screen is a chat: shares
 render as job cards, plain messages as bubbles, replies inline. Composer has a paste-first
@@ -196,7 +199,7 @@ worth keeping — context is why WhatsApp shares are useful.
 ### 5.3 Web
 
 Same information architecture, three-column on desktop: groups rail | feed/chat | job
-detail. Two things the web build should do *better* than mobile:
+detail. Two things the web build should do _better_ than mobile:
 
 - **Tracker as a real board** with drag between columns and CSV export.
 - **Bulk triage**: keyboard-driven (`j/k` to move, `s` save, `x` dismiss, `a` mark applied,
@@ -209,7 +212,7 @@ Web is a PWA (installable, push via Web Push) plus the browser extension for cap
 ```mermaid
 flowchart LR
   subgraph Clients
-    A[Android app<br/>+ overlay bubble] 
+    A[Android app<br/>+ overlay bubble]
     B[iOS app<br/>+ Share Extension]
     W[Web PWA]
     E[Browser extension]
@@ -226,26 +229,41 @@ flowchart LR
 
 ### 6.1 Stack recommendation
 
-| Layer | Choice | Why |
-|---|---|---|
-| Mobile + web client | **Flutter** (single codebase → iOS, Android, Web) | One person maintaining three targets. Flutter Web is acceptable for an app-like PWA. |
-| Native bits | Kotlin (overlay service, share intent), Swift (Share Extension, App Intent) via platform channels | Unavoidable — these are the capture surfaces and they are inherently native. |
-| Backend | **Supabase** (Postgres + Auth + Realtime + Storage + Edge Functions) | Auth, row-level security, realtime subscriptions and file storage without building four services. Postgres means we are not locked into a proprietary data model. |
-| Queue/workers | Postgres-backed queue (`pgmq` or a simple `SKIP LOCKED` table) + a small Node/Python worker on Fly.io or Railway | Enrichment is bursty and low-volume; a separate broker is overkill at this size. |
-| Link unfurl | Self-hosted fetch + OG/JSON-LD parse; `schema.org/JobPosting` when present | Most boards emit JobPosting JSON-LD — free structured data. |
-| OCR | On-device **ML Kit** (Android) / **Vision** (iOS) first, server fallback | Free, instant, private. Server OCR only when the client can't. |
-| JD understanding | Claude (`claude-sonnet-5` for volume, `claude-opus-5` for hard parses) on the extracted text | Turns messy OCR/WhatsApp-forward text into structured fields reliably; regex alone fails on real-world JDs. |
-| Push | FCM (Android + Web) and APNs (iOS) | — |
+| Layer               | Choice                                                                                                                 | Why                                                                                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mobile + web client | **Expo / React Native + TypeScript** (single codebase → iOS, Android, Web)                                             | See §6.2 — this supersedes the Flutter recommendation this doc originally carried.                                                                                |
+| Native bits         | Kotlin (overlay service, share intent), Swift (Share Extension, App Intent) via Expo native modules and config plugins | Unavoidable — these are the capture surfaces and they are inherently native.                                                                                      |
+| Backend             | **Supabase** (Postgres + Auth + Realtime + Storage + Edge Functions)                                                   | Auth, row-level security, realtime subscriptions and file storage without building four services. Postgres means we are not locked into a proprietary data model. |
+| Queue/workers       | Postgres-backed queue (`pgmq` or a simple `SKIP LOCKED` table) + a small Node/Python worker on Fly.io or Railway       | Enrichment is bursty and low-volume; a separate broker is overkill at this size.                                                                                  |
+| Link unfurl         | Self-hosted fetch + OG/JSON-LD parse; `schema.org/JobPosting` when present                                             | Most boards emit JobPosting JSON-LD — free structured data.                                                                                                       |
+| OCR                 | On-device **ML Kit** (Android) / **Vision** (iOS) first, server fallback                                               | Free, instant, private. Server OCR only when the client can't.                                                                                                    |
+| JD understanding    | Claude (`claude-sonnet-5` for volume, `claude-opus-5` for hard parses) on the extracted text                           | Turns messy OCR/WhatsApp-forward text into structured fields reliably; regex alone fails on real-world JDs.                                                       |
+| Push                | FCM (Android + Web) and APNs (iOS)                                                                                     | —                                                                                                                                                                 |
 
 If Supabase is rejected later, the escape hatch is plain Postgres + a NestJS API; the
 schema below is portable.
 
-### 6.2 An honest note on Flutter vs the alternative
+### 6.2 Why Expo, and the Flutter call this replaces
 
-Flutter is the right call *given* a solo builder and a hard web requirement. The one place
-it costs you is the Android overlay and the iOS Share Extension, which must be written
-natively either way — so React Native would not save that work. Expect roughly 15–20% of
-the mobile effort to be native platform code regardless of framework.
+This doc originally recommended Flutter. That was reconsidered before any code was written,
+and the deciding argument was not UI quality — it was iOS build machinery and the Share
+Extension.
+
+- **iOS builds need macOS.** EAS Build compiles iOS in the cloud, so a solo developer
+  without a Mac can still ship. Flutter would mean buying a Mac or renting Codemagic.
+- **`expo-share-intent` already implements the iOS Share Extension** and the Android
+  `ACTION_SEND` intent as a maintained Expo module. That is the single hardest piece of
+  Phase 1, and it is the difference between a week of Swift and an afternoon of config.
+- **The bubble was never a differentiator.** An Android overlay is a foreground service
+  inflating a view through `WindowManager` — Kotlin under Flutter, React Native or native
+  alike. No framework makes it easier, so it should not have influenced the choice.
+
+What Flutter would have given up in exchange is real: finer pixel control and a single
+rendering model across platforms. For a product whose value is a two-second gesture rather
+than a bespoke interface, the build pipeline mattered more.
+
+Expect roughly 15–20% of the mobile effort to be native platform code regardless of
+framework.
 
 ## 7. Data model
 
@@ -390,17 +408,17 @@ The default that keeps people installed:
 
 - **Instant push** only for: a DM, a reply to your share, a group invite/connection request.
 - **Batched digest** for new jobs: at most one push per group per **hour**, worded as
-  "3 new jobs in *2024 Grads* — SDE-1 at Zeta, +2". A person sharing 8 jobs in a burst
+  "3 new jobs in _2024 Grads_ — SDE-1 at Zeta, +2". A person sharing 8 jobs in a burst
   must produce one notification, not eight.
 - **Daily digest** (default 9pm, configurable): "11 jobs today, 4 match backend/remote."
-- Per-group mute, and a global "only digest" switch in onboarding — offered *before* the
+- Per-group mute, and a global "only digest" switch in onboarding — offered _before_ the
   first flood, not after.
 
 ## 10. Onboarding
 
 The first-run sequence decides adoption. Five steps, none skippable-into-a-dead-end:
 
-1. Phone OTP or Google (10s).
+1. Google or Apple (10s).
 2. Name + photo (prefilled from Google; skippable).
 3. **Join or create a group** — deep link from an invite lands here directly, already
    filled in. An empty app is a dead app.
@@ -418,17 +436,17 @@ anything — that's the on-ramp.
 
 Estimates assume one focused developer; halve the calendar if two.
 
-| # | Milestone | Contents | Est. |
-|---|---|---|---|
-| M0 | Foundations | Repo/monorepo layout, Supabase project, schema + RLS, auth (phone + Google), CI | 1.5 wk |
-| M1 | Groups + chat | Create/join/leave, invite links, group message list, realtime, read state, plain text messages | 2 wk |
-| M2 | Share pipeline (links) | `POST /v1/share` with idempotency, broadcast fan-out to all groups, offline queue, canonicalization, unfurl worker, dedupe, job card UI | 2 wk |
-| M3 | Capture surfaces | Android share-sheet intent + **overlay bubble**; iOS **Share Extension** + App Intent/Back Tap; web PWA share target | 2 wk |
-| M4 | Image + text JDs | Upload/storage, on-device OCR, LLM structured extract, **email extraction**, mailto apply | 1.5 wk |
-| M5 | Feed + Tracker | Unified feed, filters/search, per-user status, tracker screen, swipe actions | 1.5 wk |
-| M6 | Notifications | FCM/APNs/Web Push, digest batching, per-group prefs | 1 wk |
-| M7 | DMs + approvals | Connection requests, approval gates, DM threads | 1 wk |
-| M8 | Web polish + beta | Three-column desktop layout, keyboard triage, board view, browser extension, then ship to the actual friend circle | 2 wk |
+| #   | Milestone              | Contents                                                                                                                                | Est.   | Status   |
+| --- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------- |
+| M0  | Foundations            | Repo/monorepo layout, Supabase schema + RLS with a test suite, auth (Google + Apple), app shell, CI                                     | 1.5 wk | **done** |
+| M1  | Groups + chat          | Create/join/leave, invite links, group message list, realtime, read state, plain text messages                                          | 2 wk   |          |
+| M2  | Share pipeline (links) | `POST /v1/share` with idempotency, broadcast fan-out to all groups, offline queue, canonicalization, unfurl worker, dedupe, job card UI | 2 wk   |          |
+| M3  | Capture surfaces       | Android share-sheet intent + **overlay bubble**; iOS **Share Extension** + App Intent/Back Tap; web PWA share target                    | 2 wk   |          |
+| M4  | Image + text JDs       | Upload/storage, on-device OCR, LLM structured extract, **email extraction**, mailto apply                                               | 1.5 wk |          |
+| M5  | Feed + Tracker         | Unified feed, filters/search, per-user status, tracker screen, swipe actions                                                            | 1.5 wk |          |
+| M6  | Notifications          | FCM/APNs/Web Push, digest batching, per-group prefs                                                                                     | 1 wk   |          |
+| M7  | DMs + approvals        | Connection requests, approval gates, DM threads                                                                                         | 1 wk   |          |
+| M8  | Web polish + beta      | Three-column desktop layout, keyboard triage, board view, browser extension, then ship to the actual friend circle                      | 2 wk   |          |
 
 **M2 + M3 is the real product.** If time runs out, everything from M5 onward can slip; if
 M3 slips, there is no product.
@@ -440,7 +458,7 @@ Built into the schema now, exposed in the UI later:
 - **Selective targeting**: `shares` is already per-group, so "send to these 2 groups"
   needs UI only. Likely the bubble's long-press panel.
 - **Smart routing**: infer relevant groups from the job's role/location and each group's
-  history — "this looks like a data role, your *DS folks* group wants it." Only after we
+  history — "this looks like a data role, your _DS folks_ group wants it." Only after we
   have data.
 - **"Still open?"** — re-fetch `apply_url` weekly, mark expired jobs, stop showing them.
 - **Referral asks**: "anyone know someone at Zeta?" as a first-class message kind.
@@ -448,16 +466,16 @@ Built into the schema now, exposed in the UI later:
 
 ## 13. Risks
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| iOS cannot do the floating bubble | High — it's the headline feature | Make the Share Extension a genuinely one-tap send with undo; wire Action Button/Back Tap; set expectations in the doc and the UI copy |
-| Android OEM skins kill the overlay service | High | OEM-aware permission flow, deep links to autostart settings, share-sheet path as full-featured fallback, watchdog restart |
-| LinkedIn/Naukri block server-side unfurl | Medium | Client-supplied title fallback, degrade to bare link card, never error |
-| OCR/LLM cost per share | Medium | On-device OCR first; batch LLM calls; cheap model by default, escalate only on low-confidence; cache by content hash |
-| Cold start — nobody shares, group dies | High | Seed the founding group manually, import a WhatsApp backlog, digest that shows *someone* is active |
-| Notification fatigue → uninstall | High | Digest-by-default (§9) |
-| Storage cost of screenshots | Low | Compress to WebP ≤1600px, drop originals after 90 days keeping OCR text |
-| Someone leaks a private group link | Low | Rotatable join codes, admin approval toggle |
+| Risk                                       | Severity                         | Mitigation                                                                                                                            |
+| ------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| iOS cannot do the floating bubble          | High — it's the headline feature | Make the Share Extension a genuinely one-tap send with undo; wire Action Button/Back Tap; set expectations in the doc and the UI copy |
+| Android OEM skins kill the overlay service | High                             | OEM-aware permission flow, deep links to autostart settings, share-sheet path as full-featured fallback, watchdog restart             |
+| LinkedIn/Naukri block server-side unfurl   | Medium                           | Client-supplied title fallback, degrade to bare link card, never error                                                                |
+| OCR/LLM cost per share                     | Medium                           | On-device OCR first; batch LLM calls; cheap model by default, escalate only on low-confidence; cache by content hash                  |
+| Cold start — nobody shares, group dies     | High                             | Seed the founding group manually, import a WhatsApp backlog, digest that shows _someone_ is active                                    |
+| Notification fatigue → uninstall           | High                             | Digest-by-default (§9)                                                                                                                |
+| Storage cost of screenshots                | Low                              | Compress to WebP ≤1600px, drop originals after 90 days keeping OCR text                                                               |
+| Someone leaks a private group link         | Low                              | Rotatable join codes, admin approval toggle                                                                                           |
 
 ## 14. Open questions
 
@@ -470,6 +488,6 @@ Built into the schema now, exposed in the UI later:
 3. **Do we need iOS-first or Android-first?** The bubble works only on Android, and the
    friend circle is likely Android-majority. Recommendation: **Android + web first**, iOS in
    the same milestone but shipped a week later.
-4. **Region/locale** — assuming India-centric (phone auth, Naukri, HR-email applications).
+4. **Region/locale** — assuming India-centric (Naukri URL rules, HR-email applications).
    Say so if that's wrong; it changes URL rules and the email-apply emphasis.
 5. **Name and domain.** `JobDrop` is a placeholder.

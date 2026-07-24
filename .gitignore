@@ -1,0 +1,30 @@
+node_modules/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# expo
+.expo/
+web-build/
+ios/
+android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# env
+.env
+.env.*
+!.env.example
+
+# local postgres cluster + logs (see scripts/db.sh)
+.pgdata/
+*.log
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/

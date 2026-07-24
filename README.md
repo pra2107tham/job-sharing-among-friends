@@ -10,13 +10,29 @@ exactly when the hunt gets hard. The fix is to make sharing a single gesture tha
 broadcasts to everyone at once, and to make the receiving side a searchable, trackable
 list instead of a chat scrollback.
 
+## Status
+
+**M0 is built**: monorepo, full Postgres schema with row level security and a test suite
+that proves it, Google/Apple auth, and an Expo app shell that bundles for iOS, Android and
+web. No sharing features yet — that's M1/M2.
+
+```bash
+pnpm install
+pnpm db:test        # migrations + RLS assertions against a local Postgres
+pnpm typecheck && pnpm lint
+cd apps/mobile && pnpm start
+```
+
+You'll need a `.env` (copy `.env.example`) with a Supabase URL/anon key and Google OAuth
+client IDs before sign-in works. See [CLAUDE.md](CLAUDE.md) for the working rules.
+
 ## Planning docs
 
-| # | Doc | Scope | Status |
-|---|-----|-------|--------|
-| 1 | [Job sharing app & website](docs/01-job-sharing-app.md) | Mobile (iOS + Android) + web app for capturing and broadcasting jobs to groups | **Current priority** |
-| 2 | [Job application agent](docs/02-job-application-agent.md) | Autonomous agent that tailors a resume and applies on the user's behalf | Later, separate branch |
-| 3 | [Integration plan](docs/03-integration.md) | How 1 and 2 merge into one product | After both exist |
+| #   | Doc                                                       | Scope                                                                          | Status                 |
+| --- | --------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------- |
+| 1   | [Job sharing app & website](docs/01-job-sharing-app.md)   | Mobile (iOS + Android) + web app for capturing and broadcasting jobs to groups | **Current priority**   |
+| 2   | [Job application agent](docs/02-job-application-agent.md) | Autonomous agent that tailors a resume and applies on the user's behalf        | Later, separate branch |
+| 3   | [Integration plan](docs/03-integration.md)                | How 1 and 2 merge into one product                                             | After both exist       |
 
 Read them in order. Doc 1 is the one being built now; docs 2 and 3 exist so that
 decisions made today (data model, job identity, email extraction) don't have to be

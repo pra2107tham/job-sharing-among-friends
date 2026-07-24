@@ -30,7 +30,7 @@ These are product constraints, not legal boilerplate. They shape the architectur
 - **The agent applies only to jobs the user explicitly queues.** No autonomous trawling
   and mass-applying. That produces garbage applications, burns the user's reputation, and
   is what gets tooling blocked.
-- **Never fabricates.** Tailoring means reordering, re-emphasizing and rewording *true*
+- **Never fabricates.** Tailoring means reordering, re-emphasizing and rewording _true_
   content from the master profile. If a JD asks for a skill the user doesn't have, the
   agent does not invent it; it flags the gap in the fit report.
 - **Never answers legally-significant questions on its own** — work authorization,
@@ -70,15 +70,15 @@ flowchart TD
 
 ### 3.1 Components
 
-| Component | Choice | Notes |
-|---|---|---|
-| Orchestration | **LangGraph** (Python) or a hand-rolled state machine | A durable, resumable graph matters more than the framework. Each node checkpoints so a run can pause for a human and resume hours later. |
-| Reasoning | Claude — `claude-opus-5` for planning/tailoring, `claude-sonnet-5` for per-step DOM decisions | Per-step calls dominate cost; keep them on the cheaper model with the expensive one reserved for the plan and the resume. |
-| Browser | **Browserbase** (hosted, stealth-configured Chrome, session recording, live view URL) driven by **Playwright over CDP** | Live view is what makes human handoff possible. Session recording is the audit trail. |
-| Page representation | Accessibility tree + trimmed DOM, not raw HTML; screenshot only when the text representation is ambiguous | Raw HTML blows the context window and makes the model worse, not better. |
-| Resume rendering | Structured JSON → Typst or LaTeX → PDF (deterministic), **not** LLM-generated layout | ATS parsers care about structure; a template you control is testable. |
-| Storage | Postgres (shared with Doc 1) + object storage for PDFs/screenshots | |
-| Queue | Same Postgres queue pattern as Doc 1 | |
+| Component           | Choice                                                                                                                  | Notes                                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Orchestration       | **LangGraph** (Python) or a hand-rolled state machine                                                                   | A durable, resumable graph matters more than the framework. Each node checkpoints so a run can pause for a human and resume hours later. |
+| Reasoning           | Claude — `claude-opus-5` for planning/tailoring, `claude-sonnet-5` for per-step DOM decisions                           | Per-step calls dominate cost; keep them on the cheaper model with the expensive one reserved for the plan and the resume.                |
+| Browser             | **Browserbase** (hosted, stealth-configured Chrome, session recording, live view URL) driven by **Playwright over CDP** | Live view is what makes human handoff possible. Session recording is the audit trail.                                                    |
+| Page representation | Accessibility tree + trimmed DOM, not raw HTML; screenshot only when the text representation is ambiguous               | Raw HTML blows the context window and makes the model worse, not better.                                                                 |
+| Resume rendering    | Structured JSON → Typst or LaTeX → PDF (deterministic), **not** LLM-generated layout                                    | ATS parsers care about structure; a template you control is testable.                                                                    |
+| Storage             | Postgres (shared with Doc 1) + object storage for PDFs/screenshots                                                      |                                                                                                                                          |
+| Queue               | Same Postgres queue pattern as Doc 1                                                                                    |                                                                                                                                          |
 
 ### 3.2 The loop, concretely
 
@@ -144,8 +144,8 @@ comes, the user needs to know which resume the interviewer is holding.
 Portals ask the same 30 questions forever. Fill once, reuse:
 
 - Identity/contact, location, willingness to relocate
-- Work authorization, sponsorship need, visa status *(user-entered, never inferred)*
-- Notice period, current CTC, expected CTC *(sensitive; per-application override)*
+- Work authorization, sponsorship need, visa status _(user-entered, never inferred)_
+- Notice period, current CTC, expected CTC _(sensitive; per-application override)_
 - Years of experience per skill
 - "Why this company?" — generated per application from the JD + company page, then cached
 - Demographic/EEO questions — **default to "decline to answer"** unless the user set a value
@@ -218,15 +218,15 @@ Straightforward and high-value for the India-centric case where a JD carries an 
 
 ## 9. Milestones
 
-| # | Milestone | Contents | Est. |
-|---|---|---|---|
-| A0 | Harness | Browserbase + Playwright session mgmt, a11y snapshotting, action executor, event log, replay viewer | 1.5 wk |
-| A1 | Profile + resume engine | Master profile schema, tailoring pipeline, Typst/LaTeX template, PDF render, fact-trace validator | 2 wk |
-| A2 | Email apply | Gmail OAuth, composer, attachment, draft-approval UI | 1 wk |
-| A3 | Agent loop | Plan/act/verify loop, budgets, `ask_human` pause + resume, review-before-submit | 2 wk |
-| A4 | Adapters | Greenhouse, Lever, Ashby + fixture tests | 1.5 wk |
-| A5 | Workday | Account handling, multi-page state | 1 wk |
-| A6 | Ops | Rate limits, cost tracking, success metrics, failure triage dashboard | 1 wk |
+| #   | Milestone               | Contents                                                                                            | Est.   |
+| --- | ----------------------- | --------------------------------------------------------------------------------------------------- | ------ |
+| A0  | Harness                 | Browserbase + Playwright session mgmt, a11y snapshotting, action executor, event log, replay viewer | 1.5 wk |
+| A1  | Profile + resume engine | Master profile schema, tailoring pipeline, Typst/LaTeX template, PDF render, fact-trace validator   | 2 wk   |
+| A2  | Email apply             | Gmail OAuth, composer, attachment, draft-approval UI                                                | 1 wk   |
+| A3  | Agent loop              | Plan/act/verify loop, budgets, `ask_human` pause + resume, review-before-submit                     | 2 wk   |
+| A4  | Adapters                | Greenhouse, Lever, Ashby + fixture tests                                                            | 1.5 wk |
+| A5  | Workday                 | Account handling, multi-page state                                                                  | 1 wk   |
+| A6  | Ops                     | Rate limits, cost tracking, success metrics, failure triage dashboard                               | 1 wk   |
 
 ## 10. What "working" means
 
@@ -239,12 +239,12 @@ Straightforward and high-value for the India-centric case where a JD carries an 
 
 ## 11. Risks
 
-| Risk | Mitigation |
-|---|---|
-| Portals change DOM constantly | Adapters are a fast path only; generic loop is the floor. Fixture tests catch drift. |
-| Bot detection blocks the run | Browserbase stealth defaults; human-like pacing; on block → pause and hand off, never escalate evasion |
-| LLM fills a field wrong and the user doesn't notice | `review` mode by default; full field summary logged; screenshots per step |
-| LinkedIn account risk | Don't automate LinkedIn Easy Apply by default; deep-link the human instead |
-| Applications get worse, not better, at volume | Fit-score gate — refuse to apply below a threshold, and tell the user why |
-| Cost blowup from loops | Hard step/time/₹ budgets per run, per-day caps |
-| Sensitive data (CTC, phone, address) in logs | Redact from event logs; encrypt answer-bank rows marked `sensitive` |
+| Risk                                                | Mitigation                                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Portals change DOM constantly                       | Adapters are a fast path only; generic loop is the floor. Fixture tests catch drift.                   |
+| Bot detection blocks the run                        | Browserbase stealth defaults; human-like pacing; on block → pause and hand off, never escalate evasion |
+| LLM fills a field wrong and the user doesn't notice | `review` mode by default; full field summary logged; screenshots per step                              |
+| LinkedIn account risk                               | Don't automate LinkedIn Easy Apply by default; deep-link the human instead                             |
+| Applications get worse, not better, at volume       | Fit-score gate — refuse to apply below a threshold, and tell the user why                              |
+| Cost blowup from loops                              | Hard step/time/₹ budgets per run, per-day caps                                                         |
+| Sensitive data (CTC, phone, address) in logs        | Redact from event logs; encrypt answer-bank rows marked `sensitive`                                    |

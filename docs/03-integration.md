@@ -27,19 +27,26 @@ agent removes the reason people don't act on what's shared.
 integration is mostly UI work. Get this wrong — let the agent keep its own job table — and
 merging means a migration and a dedupe reconciliation nobody wants to write.
 
-Concretely, decisions to lock in *now*, during Phase 1:
+Concretely, decisions to lock in _now_, during Phase 1:
 
-| Decision | Commitment |
-|---|---|
-| One `job_posts` row = one real-world job | Enforced by `url_hash` unique index + fuzzy dedupe |
-| `apply_url` and `apply_emails[]` are first-class columns | The agent's two entry points |
-| `description` always holds the full JD text | The agent's tailoring input; don't truncate it |
-| `job_status` (Doc 1, per-user) and `applications` (Doc 2) are separate tables | `job_status` is the user's manual intent; `applications` is a machine run. Agent runs *write into* `job_status`, never the reverse |
-| Same Postgres instance, same auth/user ids | No cross-service identity mapping |
-| Monorepo | `apps/mobile`, `apps/web`, `services/api`, `services/ingest`, `services/agent`, `packages/contracts` |
+| Decision                                                                      | Commitment                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One `job_posts` row = one real-world job                                      | Enforced by `url_hash` unique index + fuzzy dedupe                                                                                                                                                                                                                          |
+| `apply_url` and `apply_emails[]` are first-class columns                      | The agent's two entry points                                                                                                                                                                                                                                                |
+| `description` always holds the full JD text                                   | The agent's tailoring input; don't truncate it                                                                                                                                                                                                                              |
+| `job_status` (Doc 1, per-user) and `applications` (Doc 2) are separate tables | `job_status` is the user's manual intent; `applications` is a machine run. Agent runs _write into_ `job_status`, never the reverse                                                                                                                                          |
+| Same Postgres instance, same auth/user ids                                    | No cross-service identity mapping                                                                                                                                                                                                                                           |
+| Monorepo                                                                      | pnpm workspaces. Today: `apps/mobile` (Expo — iOS, Android and web from one codebase), `packages/contracts`, `packages/api-client`, `supabase/`. Phase 2 adds `services/agent`; `services/ingest` arrives with M2. A separate `apps/web` is deferred to M8 — see doc 1 §6.1 |
 
 `packages/contracts` holds the shared types (job, profile, application status enum) and is
-the only thing both halves import from each other.
+the only thing both halves import from each other. It exists as of M0 and deliberately has
+no dependency beyond zod, so the agent service can consume it without pulling in React
+Native.
+
+One thing M0 settled that matters here: the row types in
+`packages/contracts/src/database.ts` must be `type` aliases, not `interface`. Interfaces
+do not get implicit index signatures, so supabase-js cannot match them against its
+`GenericSchema` constraint and silently resolves every query to `never`.
 
 ## 3. Integration surfaces
 
@@ -105,10 +112,10 @@ Feature flags needed: `agent_enabled`, `agent_auto_submit`, `group_application_s
 
 ## 6. Risks specific to the combination
 
-| Risk | Why it matters here | Mitigation |
-|---|---|---|
-| Agent makes sharing feel transactional | The group's value is people caring; automated bulk-apply can turn it into a spam feed | Keep sharing human; no auto-sharing of jobs the agent finds, ever |
-| Privacy leak of application data into groups | Fastest way to destroy trust in a friend group | Private by default, aggregate-only opt-ins, rejections never surfaced |
-| Real-world shared jobs are messier than ATS test cases | Agent success rate drops hard on LinkedIn/screenshot-sourced jobs | Route by confidence: only auto-apply when `apply_url` resolves to a known ATS; otherwise deep-link the human |
-| Two codebases diverge before merging | Migration pain | Shared `packages/contracts` + shared Postgres from day one |
-| Scope creep kills Phase 1 | The agent is more fun to build than notification batching | Hard rule: no agent code on the Phase 1 branch, and Phase 1 ships to real users before Phase 2 starts |
+| Risk                                                   | Why it matters here                                                                   | Mitigation                                                                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Agent makes sharing feel transactional                 | The group's value is people caring; automated bulk-apply can turn it into a spam feed | Keep sharing human; no auto-sharing of jobs the agent finds, ever                                            |
+| Privacy leak of application data into groups           | Fastest way to destroy trust in a friend group                                        | Private by default, aggregate-only opt-ins, rejections never surfaced                                        |
+| Real-world shared jobs are messier than ATS test cases | Agent success rate drops hard on LinkedIn/screenshot-sourced jobs                     | Route by confidence: only auto-apply when `apply_url` resolves to a known ATS; otherwise deep-link the human |
+| Two codebases diverge before merging                   | Migration pain                                                                        | Shared `packages/contracts` + shared Postgres from day one                                                   |
+| Scope creep kills Phase 1                              | The agent is more fun to build than notification batching                             | Hard rule: no agent code on the Phase 1 branch, and Phase 1 ships to real users before Phase 2 starts        |

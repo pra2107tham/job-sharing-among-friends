@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  static:
+    name: Typecheck, lint, format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+
+  database:
+    name: Migrations and RLS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ubuntu-latest ships Postgres 16 server binaries but does not run a
+      # cluster; scripts/db.sh builds its own, same as it does locally.
+      - name: Run the RLS suite
+        run: ./scripts/db.sh test
+
+  bundle:
+    name: Bundle all platforms
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The step that catches what tsc cannot: module resolution under pnpm's
+      # isolated linker, and babel/NativeWind transform failures.
+      - name: Export web
+        working-directory: apps/mobile
+        run: npx expo export --platform web
+      - name: Export native
+        working-directory: apps/mobile
+        run: npx expo export --platform ios --platform android

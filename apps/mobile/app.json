@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "JobDrop",
+    "slug": "jobdrop",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "jobdrop",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.jobdrop.client",
+      "usesAppleSignIn": true
+    },
+    "android": {
+      "package": "app.jobdrop.client",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "//output": "SPA, not static prerendering. Every screen is behind auth, so there is nothing to prerender for SEO, and static rendering executes app modules at build time — which means a build machine without Supabase env vars fails the build instead of the app failing loudly at startup where it belongs.",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-apple-authentication",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
