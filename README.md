@@ -22,8 +22,12 @@ collapsed into one feed card.
 - **M2** the share pipeline: idempotent broadcast, offline outbox, URL canonicalisation and
   dedupe, the enrichment worker, job cards and the unified feed
 
-Not built yet: the Android bubble and iOS Share Extension (M3), image/OCR shares (M4), the
-tracker (M5), notifications (M6).
+- **M3** the Android bubble (drag a link onto a floating circle from any app), the Android
+  share sheet, and the iOS Share Extension. See
+  [doc 5](docs/05-native-capture.md) — the wiring is verified in CI, but the Kotlin and
+  Swift have never been compiled, because that needs an Android SDK and a Mac.
+
+Not built yet: image/OCR shares (M4), the tracker (M5), notifications (M6).
 
 ```bash
 pnpm install

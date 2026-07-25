@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Loading } from '@/components/ui';
+import { drainNativeShares, syncNativeCredentials } from '@/lib/native-share';
 import { flushOutbox } from '@/lib/outbox';
 import { isOnboarded, SessionProvider, useSession } from '@/lib/session';
 import '../global.css';
@@ -43,13 +44,27 @@ function Gate() {
     if (inAuthGroup && !isPublicInvite) router.replace('/(tabs)');
   }, [loading, session, profile, segments, router]);
 
-  // Anything queued while offline goes out as soon as the app is usable again.
+  // The native surfaces need a token to send on their own, and they hold onto
+  // anything they could not deliver. Both directions are handled here, on every
+  // session change and every return to the foreground.
   useEffect(() => {
-    if (!session) return;
-    void flushOutbox();
+    if (!session) {
+      syncNativeCredentials(null);
+      return;
+    }
+
+    syncNativeCredentials(session);
+
+    const catchUp = () => {
+      // Native queue first, so bubble captures keep their place in line ahead
+      // of anything queued in-app afterwards.
+      void drainNativeShares().then(() => flushOutbox());
+    };
+
+    catchUp();
 
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void flushOutbox();
+      if (state === 'active') catchUp();
     });
     return () => sub.remove();
   }, [session]);
@@ -69,6 +84,7 @@ function Gate() {
       <Stack.Screen name="group/[id]/settings" />
       <Stack.Screen name="job/[id]" />
       <Stack.Screen name="j/[code]" />
+      <Stack.Screen name="capture" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

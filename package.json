@@ -19,7 +19,8 @@
     "db:test": "./scripts/db.sh test",
     "db:psql": "./scripts/db.sh psql",
     "doctor": "node scripts/doctor.mjs",
-    "db:bundle": "./scripts/bundle-migrations.sh"
+    "db:bundle": "./scripts/bundle-migrations.sh",
+    "check:prebuild": "node scripts/check-prebuild.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

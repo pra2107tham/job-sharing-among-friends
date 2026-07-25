@@ -5,8 +5,8 @@ out to every group they're in and gets tracked per person. Product plan is in
 [`docs/01-job-sharing-app.md`](docs/01-job-sharing-app.md) — read it before changing
 behaviour, not just structure.
 
-Current milestone: **M0-M2 done** — foundations, groups + chat, share pipeline.
-Next is M3 (Android bubble + iOS Share Extension).
+Current milestone: **M0-M3 done** — foundations, groups + chat, share pipeline, native
+capture surfaces. Next is M4 (image/OCR shares).
 
 ## Layout
 
@@ -14,7 +14,9 @@ Next is M3 (Android bubble + iOS Share Extension).
 apps/mobile/          Expo app — iOS, Android and web from one codebase
 packages/contracts/   shared types, zod schemas, design tokens, URL canonicalisation
 packages/api-client/  typed Supabase client + query helpers
-services/ingest/      enrichment worker: claims ingest_jobs, unfurls links, parses JDs
+services/ingest/      enrichment worker: claims ingest_jobs, unfurls links, dedupes, parses JDs
+apps/mobile/modules/  local Expo native module: Android bubble, iOS App Group storage
+apps/mobile/plugins/  config plugin + iOS Share Extension source
 supabase/migrations/  SQL, applied in filename order
 supabase/tests/       RLS + share/feed suites, and the local auth-schema stub
 scripts/db.sh         local Postgres harness (no Docker needed)
@@ -33,6 +35,7 @@ pnpm db:test           # reset, then run the RLS suite  ← run this after touch
 pnpm db:psql           # psql into the local db
 pnpm doctor            # validate .env + hosted Supabase; prints no secrets
 pnpm db:bundle         # all migrations as one script for the SQL editor
+pnpm check:prebuild    # asserts the config plugin still wires up the native projects
 pnpm test              # vitest: URL rules, JD parsing, ingest integration
 
 cd services/ingest
@@ -126,16 +129,34 @@ table above.
 | Expo web instead of a separate Next.js app                | Doc 1's desktop triage UI is an M8 concern; two UIs at M0 is waste                                                                                                                                                                                                                                                                                   |
 | Reanimated + Gesture Handler present at M0                | Not used yet — NativeWind's native runtime imports Reanimated                                                                                                                                                                                                                                                                                        |
 
-## The Android bubble (M3), so nobody re-litigates it
+## The native capture surfaces (M3) — built, but never compiled
 
-The floating bubble is Kotlin regardless of framework — a foreground service holding
-`SYSTEM_ALERT_WINDOW` and inflating a view via `WindowManager`. Write it as plain Android
-views, not React-in-the-overlay: it must appear instantly, work when the app is dead, and
-send via Room + WorkManager without booting a JS runtime (doc 1 §4.3 budgets 300ms).
+`docs/05-native-capture.md` is the full picture. The parts worth knowing before touching
+them:
 
-**iOS cannot do this.** No app may draw over other apps. The iOS path is the Share
-Extension plus an App Intent bound to the Action Button / Back Tap. Don't spend time
-looking for a way around it.
+**Kotlin and Swift here have never been compiled.** No Android SDK, no macOS. What IS
+verified is the config plugin that wires them in — `pnpm check:prebuild` runs prebuild and
+asserts 17 things about the generated manifest and entitlements, in CI. Treat the native
+code as reviewed-but-unrun; expect a device session to shake out small errors.
+
+**The bubble is plain Android views, not React in the overlay.** It must appear instantly,
+work when the app is dead, and send without a JS runtime — doc 1 §4.3 budgets 300ms and a
+React context costs more than that alone.
+
+**iOS cannot have a bubble, permanently.** No app may draw over other apps. The Share
+Extension is the answer and it is built to send before the sheet is even visible, with
+Undo as the only control. Don't go looking for a way around this.
+
+**Native surfaces send `raw_input` with no url_hash.** Canonicalisation lives in one place
+(TypeScript) and the worker settles identity via `merge_job_posts`. Do not port the URL
+rules into Kotlin or Swift — three copies would drift, and drift means duplicate cards.
+
+**The share sheet is not optional.** OEM skins kill overlay services, so `ACTION_SEND` is
+the path that always works and the bubble is a bonus on top of it.
+
+**Every queued share carries a `clientShareId` from capture time**, and `share_job` is
+idempotent on it. That is what makes "the bubble sent it but failed to dequeue it" safe —
+`drainNativeShares()` carries the native id over rather than minting a new one.
 
 ## Style
 

@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Body, Button, Screen, Title } from '@/components/ui';
@@ -6,6 +7,7 @@ import { useSession } from '@/lib/session';
 
 export default function You() {
   const { profile, session } = useSession();
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   return (
@@ -24,7 +26,8 @@ export default function You() {
 
       <View className="flex-1" />
 
-      <View className="pb-xl">
+      <View className="gap-md pb-xl">
+        <Button label="Quick sharing" variant="secondary" onPress={() => router.push('/capture')} />
         <Button
           label="Sign out"
           variant="secondary"

@@ -43,7 +43,7 @@ module.exports = [
   },
   {
     // Config files are CommonJS and run in Node.
-    files: ['**/*.config.js', 'eslint.config.js'],
+    files: ['**/*.config.js', 'eslint.config.js', 'apps/mobile/plugins/**/*.js'],
     languageOptions: { sourceType: 'commonjs' },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },

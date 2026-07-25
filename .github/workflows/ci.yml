@@ -44,6 +44,23 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:54329/jobdrop
 
+  native:
+    name: Native capture wiring
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Kotlin and Swift cannot be compiled here, but the config plugin that
+      # wires them into the native projects is plain JS and prebuild runs
+      # anywhere. This catches plugin regressions that would otherwise only
+      # surface on a device build.
+      - run: pnpm check:prebuild
+
   bundle:
     name: Bundle all platforms
     runs-on: ubuntu-latest

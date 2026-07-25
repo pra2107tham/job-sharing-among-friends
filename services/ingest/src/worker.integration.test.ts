@@ -81,6 +81,35 @@ async function seedShare(url: string): Promise<{ jobPostId: string; userId: stri
   }
 }
 
+/** How the Android bubble and iOS extension share: raw text, no hash. */
+async function seedShareWithoutHash(url: string): Promise<{ jobPostId: string; userId: string }> {
+  const client = await pool.connect();
+  try {
+    const { rows: userRows } = await client.query<{ id: string }>(
+      `insert into auth.users (email) values ('native-share@example.test') returning id`,
+    );
+    const userId = userRows[0]!.id;
+    await client.query(`select set_config('request.jwt.claims', $1, false)`, [
+      JSON.stringify({ sub: userId, role: 'authenticated' }),
+    ]);
+    await client.query(`insert into groups (name, created_by) values ('Native test', $1)`, [
+      userId,
+    ]);
+
+    const { rows } = await client.query<{ job_post_id: string }>(
+      `select * from share_job(
+         p_client_share_id := gen_random_uuid(),
+         p_source_type := 'link',
+         p_raw_input := $1)`,
+      [url],
+    );
+    return { jobPostId: rows[0]!.job_post_id, userId };
+  } finally {
+    await client.query(`select set_config('request.jwt.claims', '', false)`).catch(() => {});
+    client.release();
+  }
+}
+
 afterAll(async () => {
   await pool?.end();
 });
@@ -178,5 +207,80 @@ describe.skipIf(!available)('ingest worker against the real schema', () => {
                       where status = 'queued'`);
 
     expect(await runOnce(pool, stubFetcher(JOB_HTML))).toBe(false);
+  });
+});
+
+describe.skipIf(!available)('server-side dedupe (M3: native surfaces send no hash)', () => {
+  beforeEach(async () => {
+    await pool.query('delete from ingest_jobs');
+  });
+
+  it('folds a hashless share into the job that already owns the URL', async () => {
+    const url = `https://jobs.northwind.test/dupe/${Date.now()}`;
+
+    // First share goes through the JS path, which supplies a hash.
+    const first = await seedShare(url);
+    await runOnce(pool, stubFetcher(JOB_HTML));
+
+    // Second share arrives the way the Android bubble sends: raw input only.
+    const second = await seedShareWithoutHash(url);
+    expect(second.jobPostId).not.toBe(first.jobPostId);
+
+    await runOnce(pool, stubFetcher(JOB_HTML));
+
+    // The duplicate row is gone and its delivery now points at the survivor.
+    const survivors = await pool.query<{ id: string }>(
+      `select id from job_posts where id = any($1::uuid[])`,
+      [[first.jobPostId, second.jobPostId]],
+    );
+    expect(survivors.rows).toHaveLength(1);
+    expect(survivors.rows[0]!.id).toBe(first.jobPostId);
+
+    const orphanMessages = await pool.query(`select 1 from messages where job_post_id = $1`, [
+      second.jobPostId,
+    ]);
+    expect(orphanMessages.rows).toHaveLength(0);
+
+    const moved = await pool.query(`select 1 from shares where job_post_id = $1`, [
+      first.jobPostId,
+    ]);
+    // Both shares now hang off the surviving job.
+    expect(moved.rows.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('sets the hash when nothing else owns it', async () => {
+    const url = `https://jobs.northwind.test/unique/${Date.now()}`;
+    const { jobPostId } = await seedShareWithoutHash(url);
+
+    await runOnce(pool, stubFetcher(JOB_HTML));
+
+    const row = await pool.query<{ url_hash: string | null }>(
+      `select url_hash from job_posts where id = $1`,
+      [jobPostId],
+    );
+    expect(row.rows[0]?.url_hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('keeps the owner-only job_status when both rows were tracked', async () => {
+    const url = `https://jobs.northwind.test/tracked/${Date.now()}`;
+    const first = await seedShare(url);
+    await runOnce(pool, stubFetcher(JOB_HTML));
+    const second = await seedShareWithoutHash(url);
+
+    // Same user tracks both rows, which would collide on merge.
+    await pool.query(
+      `insert into job_status (user_id, job_post_id, status) values ($1, $2, 'applied'), ($1, $3, 'saved')`,
+      [first.userId, first.jobPostId, second.jobPostId],
+    );
+
+    await runOnce(pool, stubFetcher(JOB_HTML));
+
+    const status = await pool.query<{ status: string }>(
+      `select status from job_status where user_id = $1`,
+      [first.userId],
+    );
+    expect(status.rows).toHaveLength(1);
+    // The status on the surviving row wins — it is the job they keep seeing.
+    expect(status.rows[0]?.status).toBe('applied');
   });
 });

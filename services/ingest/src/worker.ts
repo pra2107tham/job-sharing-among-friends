@@ -1,4 +1,5 @@
 import { canonicalizeUrl, extractEmails } from '@jobdrop/contracts';
+import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { looksAuthWalled, parseJobFromHtml, type ParsedJob } from './parse.ts';
 
@@ -154,7 +155,7 @@ export async function processUnfurl(
   client: PoolClient,
   job: IngestJob,
   fetcher: Fetcher,
-): Promise<void> {
+): Promise<string | void> {
   const { rows } = await client.query<{ canonical_url: string | null; raw_input: string | null }>(
     `select canonical_url, raw_input from job_posts where id = $1`,
     [job.job_post_id],
@@ -199,7 +200,63 @@ export async function processUnfurl(
 
   const parsed = parseJobFromHtml(response.body, response.finalUrl || url);
   await applyParsed(client, job.job_post_id, parsed, url);
+
+  // Authoritative dedupe (0016_merge_job_posts.sql). Native capture surfaces
+  // send no hash at all, and a client-computed one can be stale, so the hash is
+  // settled here — after redirects have resolved, which is when we finally know
+  // the real URL.
+  const merged = await dedupeByUrl(client, job.job_post_id, url);
+
   await client.query(`update ingest_jobs set status = 'done' where id = $1`, [job.id]);
+  return merged;
+}
+
+/**
+ * Give this job its canonical URL hash, or fold it into the job that already
+ * owns that hash. Returns the id of whichever row survived.
+ */
+export async function dedupeByUrl(
+  client: PoolClient,
+  jobPostId: string,
+  canonicalUrl: string,
+): Promise<string> {
+  const hash = createHash('sha256').update(canonicalUrl).digest('hex');
+
+  const { rows } = await client.query<{ id: string | null }>(
+    `select job_post_by_url_hash($1) as id`,
+    [hash],
+  );
+  const existing = rows[0]?.id ?? null;
+
+  if (existing && existing !== jobPostId) {
+    await client.query(`select merge_job_posts($1, $2)`, [jobPostId, existing]);
+    return existing;
+  }
+
+  // Unique partial index on url_hash; another worker may have claimed it in the
+  // gap above, in which case fall back to merging rather than erroring.
+  try {
+    await client.query(`update job_posts set url_hash = $2, canonical_url = $1 where id = $3`, [
+      canonicalUrl,
+      hash,
+      jobPostId,
+    ]);
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505') {
+      const { rows: raced } = await client.query<{ id: string | null }>(
+        `select job_post_by_url_hash($1) as id`,
+        [hash],
+      );
+      const winner = raced[0]?.id;
+      if (winner && winner !== jobPostId) {
+        await client.query(`select merge_job_posts($1, $2)`, [jobPostId, winner]);
+        return winner;
+      }
+    }
+    throw err;
+  }
+
+  return jobPostId;
 }
 
 /** Pasted JD text: no fetch, just extraction. */
