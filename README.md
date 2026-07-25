@@ -12,13 +12,23 @@ list instead of a chat scrollback.
 
 ## Status
 
-**M0 is built**: monorepo, full Postgres schema with row level security and a test suite
-that proves it, Google/Apple auth, and an Expo app shell that bundles for iOS, Android and
-web. No sharing features yet — that's M1/M2.
+**M0-M2 are built.** End to end, the loop works: sign in, create a group, send the invite
+link, paste a job link, and it fans out to every group you're in — deduped, enriched, and
+collapsed into one feed card.
+
+- **M0** monorepo, Postgres schema with row level security and a suite that proves it,
+  Google/Apple auth, app shell bundling for iOS, Android and web
+- **M1** groups, invite links, join-by-code, group chat with realtime and unread counts
+- **M2** the share pipeline: idempotent broadcast, offline outbox, URL canonicalisation and
+  dedupe, the enrichment worker, job cards and the unified feed
+
+Not built yet: the Android bubble and iOS Share Extension (M3), image/OCR shares (M4), the
+tracker (M5), notifications (M6).
 
 ```bash
 pnpm install
-pnpm db:test        # migrations + RLS assertions against a local Postgres
+pnpm db:test        # migrations + RLS/share assertions against a local Postgres
+pnpm test           # URL rules, JD parsing, ingest integration
 pnpm typecheck && pnpm lint
 cd apps/mobile && pnpm start
 ```

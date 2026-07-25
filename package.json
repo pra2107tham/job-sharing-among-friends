@@ -10,7 +10,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "eslint .",
-    "test": "turbo run test",
+    "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:start": "./scripts/db.sh start",
@@ -27,7 +27,8 @@
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
     "typescript": "~5.9.2",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^3.2.7"
   },
   "//pnpm-overrides": "Pinned to the versions Expo SDK 57 declares in bundledNativeModules.json. Transitive resolution drifts past them, and Expo's prebuilt native code is compiled against these exact versions.",
   "pnpm": {

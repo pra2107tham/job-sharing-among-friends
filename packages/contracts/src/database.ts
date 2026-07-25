@@ -191,6 +191,54 @@ export type JobStatusRow = {
   updated_at: Timestamptz;
 };
 
+/** group_overview (0013). Read-only; one row per group the caller is in. */
+export type GroupOverviewRow = {
+  id: Uuid;
+  name: string;
+  avatar_url: string | null;
+  join_code: string;
+  created_by: Uuid | null;
+  created_at: Timestamptz;
+  member_count: number;
+  last_message_at: Timestamptz | null;
+  last_message_preview: string | null;
+  last_message_sender: string | null;
+  unread_count: number;
+};
+
+/** feed_items (0015). One row per job, collapsed across groups. */
+export type FeedItemRow = {
+  job_post_id: Uuid;
+  title: string | null;
+  company: string | null;
+  location: string | null;
+  work_mode: WorkMode | null;
+  salary_text: string | null;
+  canonical_url: string | null;
+  apply_url: string | null;
+  apply_emails: string[];
+  favicon_url: string | null;
+  og_image_url: string | null;
+  source_site: string | null;
+  source_type: SourceType;
+  raw_input: string | null;
+  parse_status: ParseStatus;
+  job_created_at: Timestamptz;
+  first_shared_at: Timestamptz;
+  last_shared_at: Timestamptz;
+  group_count: number;
+  sharer_count: number;
+  first_sharer_name: string | null;
+  first_group_name: string | null;
+  note: string | null;
+};
+
+/** A message with its sender and job embedded, as PostgREST returns it. */
+export type MessageWithRelations = MessageRow & {
+  sender: Pick<ProfileRow, 'id' | 'display_name' | 'handle' | 'avatar_url'> | null;
+  job: JobPostRow | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -209,7 +257,22 @@ export type Database = {
       read_state: Table<ReadStateRow, 'user_id' | 'group_id'>;
       job_status: Table<JobStatusRow, 'user_id' | 'job_post_id'>;
     };
-    Views: Record<never, never>;
+    Views: {
+      // Views are read-only, so Insert/Update are `never`-shaped. They still
+      // have to be present for supabase-js's GenericView constraint.
+      group_overview: {
+        Row: GroupOverviewRow;
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      feed_items: {
+        Row: FeedItemRow;
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+    };
     Functions: {
       preview_group_by_code: {
         Args: { code: string };
@@ -222,6 +285,23 @@ export type Database = {
       accept_group_invite: {
         Args: { invite: Uuid };
         Returns: Uuid;
+      };
+      mark_group_read: {
+        Args: { p_group_id: Uuid };
+        Returns: undefined;
+      };
+      share_job: {
+        Args: {
+          p_client_share_id: Uuid;
+          p_source_type: SourceType;
+          p_raw_input: string;
+          p_canonical_url?: string | null;
+          p_url_hash?: string | null;
+          p_content_hash?: string | null;
+          p_note?: string | null;
+          p_group_ids?: Uuid[] | null;
+        };
+        Returns: { job_post_id: Uuid; group_count: number; deduped: boolean }[];
       };
     };
     Enums: Record<never, never>;

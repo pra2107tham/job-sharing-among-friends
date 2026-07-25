@@ -5,16 +5,18 @@ out to every group they're in and gets tracked per person. Product plan is in
 [`docs/01-job-sharing-app.md`](docs/01-job-sharing-app.md) — read it before changing
 behaviour, not just structure.
 
-Current milestone: **M0 foundations, done.** Next is M1 (groups + chat).
+Current milestone: **M0-M2 done** — foundations, groups + chat, share pipeline.
+Next is M3 (Android bubble + iOS Share Extension).
 
 ## Layout
 
 ```
 apps/mobile/          Expo app — iOS, Android and web from one codebase
-packages/contracts/   shared types, zod schemas, design tokens  ← the only cross-half import
+packages/contracts/   shared types, zod schemas, design tokens, URL canonicalisation
 packages/api-client/  typed Supabase client + query helpers
+services/ingest/      enrichment worker: claims ingest_jobs, unfurls links, parses JDs
 supabase/migrations/  SQL, applied in filename order
-supabase/tests/       RLS test suite + local auth-schema stub
+supabase/tests/       RLS + share/feed suites, and the local auth-schema stub
 scripts/db.sh         local Postgres harness (no Docker needed)
 docs/                 the three planning docs
 ```
@@ -29,6 +31,10 @@ pnpm db:start          # local Postgres 16 cluster on :54329
 pnpm db:reset          # drop, recreate, apply auth stub + all migrations
 pnpm db:test           # reset, then run the RLS suite  ← run this after touching SQL
 pnpm db:psql           # psql into the local db
+pnpm test              # vitest: URL rules, JD parsing, ingest integration
+
+cd services/ingest
+pnpm start             # run the enrichment worker (needs DATABASE_URL)
 
 cd apps/mobile
 pnpm start             # dev server
@@ -81,6 +87,24 @@ explains why `node-linker=hoisted` breaks this layout.
 
 **Verify with a real bundle.** `npx expo export --platform ios` catches resolution and
 babel problems that `tsc` cannot.
+
+**Views must be `security_invoker = true`.** `group_overview` and `feed_items` read tables
+the caller may only partly see. A normal view runs as its owner and bypasses RLS on
+everything it touches — that would hand every group in the database to every user. The
+share/feed suite asserts a non-member sees zero rows for exactly this reason.
+
+**`share_job` is SECURITY DEFINER, so it authorises itself.** It must derive target groups
+from the caller's own `group_members` rows, never trust `p_group_ids` alone. There is a
+test that a non-member passing a foreign group id delivers nothing; keep it passing.
+
+**A share must never fail.** Unparseable link, dead URL, no groups, offline — every path
+degrades to something the reader can still open. The outbox retries, and a job that cannot
+be enriched keeps `raw_input` so the card still renders.
+
+**Integration tests must skip loudly, not pass quietly.** `services/ingest` probes the
+database at module load and uses `describe.skipIf`, so a missing database reports SKIPPED.
+A test that silently passes because it did nothing is the same failure mode as the RLS
+table above.
 
 ## Decisions and why
 

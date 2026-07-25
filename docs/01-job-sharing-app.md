@@ -1,7 +1,8 @@
 # Doc 1 — Job Sharing App & Website (Phase 1)
 
 Working name: **JobDrop**
-Status: **M0 built** (foundations, schema + RLS, auth, app shell). M1 next.
+Status: **M0-M2 built** — foundations, groups and chat, and the share pipeline.
+M3 (native capture surfaces) is next.
 Branch: `claude/job-sharing-app-emg6ye`
 
 ---
@@ -439,8 +440,8 @@ Estimates assume one focused developer; halve the calendar if two.
 | #   | Milestone              | Contents                                                                                                                                | Est.   | Status   |
 | --- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------- |
 | M0  | Foundations            | Repo/monorepo layout, Supabase schema + RLS with a test suite, auth (Google + Apple), app shell, CI                                     | 1.5 wk | **done** |
-| M1  | Groups + chat          | Create/join/leave, invite links, group message list, realtime, read state, plain text messages                                          | 2 wk   |          |
-| M2  | Share pipeline (links) | `POST /v1/share` with idempotency, broadcast fan-out to all groups, offline queue, canonicalization, unfurl worker, dedupe, job card UI | 2 wk   |          |
+| M1  | Groups + chat          | Create/join/leave, invite links, group message list, realtime, read state, plain text messages                                          | 2 wk   | **done** |
+| M2  | Share pipeline (links) | `POST /v1/share` with idempotency, broadcast fan-out to all groups, offline queue, canonicalization, unfurl worker, dedupe, job card UI | 2 wk   | **done** |
 | M3  | Capture surfaces       | Android share-sheet intent + **overlay bubble**; iOS **Share Extension** + App Intent/Back Tap; web PWA share target                    | 2 wk   |          |
 | M4  | Image + text JDs       | Upload/storage, on-device OCR, LLM structured extract, **email extraction**, mailto apply                                               | 1.5 wk |          |
 | M5  | Feed + Tracker         | Unified feed, filters/search, per-user status, tracker screen, swipe actions                                                            | 1.5 wk |          |

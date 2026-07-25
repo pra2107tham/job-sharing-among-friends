@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    // Node runs this with --experimental-strip-types, which requires relative
+    // imports to carry the .ts extension they actually have on disk.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*.ts"]
+}

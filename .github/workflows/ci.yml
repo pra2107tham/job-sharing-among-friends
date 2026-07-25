@@ -22,14 +22,27 @@ jobs:
       - run: pnpm format:check
 
   database:
-    name: Migrations and RLS
+    name: Migrations, RLS and ingest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # ubuntu-latest ships Postgres 16 server binaries but does not run a
       # cluster; scripts/db.sh builds its own, same as it does locally.
       - name: Run the RLS suite
         run: ./scripts/db.sh test
+      # Runs after db.sh so the ingest integration tests find a live schema.
+      # They skip rather than fail without one, so this ordering is what makes
+      # them actually run in CI.
+      - name: Unit and integration tests
+        run: pnpm test
+        env:
+          DATABASE_URL: postgresql://postgres@127.0.0.1:54329/jobdrop
 
   bundle:
     name: Bundle all platforms

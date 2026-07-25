@@ -1,8 +1,10 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Loading } from '@/components/ui';
+import { flushOutbox } from '@/lib/outbox';
 import { isOnboarded, SessionProvider, useSession } from '@/lib/session';
 import '../global.css';
 
@@ -24,6 +26,9 @@ function Gate() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    // An invite link must survive being opened by a signed-out user: they land
+    // on /j/<code>, get bounced to sign-in, and the router returns them here.
+    const isPublicInvite = segments[0] === 'j';
 
     if (!session) {
       if (!inAuthGroup) router.replace('/(auth)/sign-in');
@@ -35,8 +40,19 @@ function Gate() {
       return;
     }
 
-    if (inAuthGroup) router.replace('/(tabs)');
+    if (inAuthGroup && !isPublicInvite) router.replace('/(tabs)');
   }, [loading, session, profile, segments, router]);
+
+  // Anything queued while offline goes out as soon as the app is usable again.
+  useEffect(() => {
+    if (!session) return;
+    void flushOutbox();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void flushOutbox();
+    });
+    return () => sub.remove();
+  }, [session]);
 
   // Render nothing until the session is known, so an already-signed-in user
   // never sees the sign-in screen flash.
@@ -46,6 +62,13 @@ function Gate() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="share" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="group/new" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="group/[id]/index" />
+      <Stack.Screen name="group/[id]/invite" />
+      <Stack.Screen name="group/[id]/settings" />
+      <Stack.Screen name="job/[id]" />
+      <Stack.Screen name="j/[code]" />
     </Stack>
   );
 }
