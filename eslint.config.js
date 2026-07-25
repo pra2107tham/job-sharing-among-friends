@@ -47,4 +47,12 @@ module.exports = [
     languageOptions: { sourceType: 'commonjs' },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
+  {
+    // Node scripts: ESM, with Node globals rather than React Native's.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: { Buffer: 'readonly', process: 'readonly', console: 'readonly' },
+    },
+  },
 ];

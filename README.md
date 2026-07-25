@@ -33,8 +33,9 @@ pnpm typecheck && pnpm lint
 cd apps/mobile && pnpm start
 ```
 
-You'll need a `.env` (copy `.env.example`) with a Supabase URL/anon key and Google OAuth
-client IDs before sign-in works. See [CLAUDE.md](CLAUDE.md) for the working rules.
+Sign-in needs a Supabase project and Google OAuth client IDs — see
+[docs/04-setup.md](docs/04-setup.md). Those values live in your `.env` and never in git or
+a chat window; `pnpm doctor` checks them for you and prints no secrets.
 
 ## Planning docs
 

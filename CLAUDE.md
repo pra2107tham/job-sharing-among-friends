@@ -18,7 +18,7 @@ services/ingest/      enrichment worker: claims ingest_jobs, unfurls links, pars
 supabase/migrations/  SQL, applied in filename order
 supabase/tests/       RLS + share/feed suites, and the local auth-schema stub
 scripts/db.sh         local Postgres harness (no Docker needed)
-docs/                 the three planning docs
+docs/                 planning docs 1-3, plus 04-setup.md
 ```
 
 ## Commands
@@ -31,6 +31,8 @@ pnpm db:start          # local Postgres 16 cluster on :54329
 pnpm db:reset          # drop, recreate, apply auth stub + all migrations
 pnpm db:test           # reset, then run the RLS suite  ← run this after touching SQL
 pnpm db:psql           # psql into the local db
+pnpm doctor            # validate .env + hosted Supabase; prints no secrets
+pnpm db:bundle         # all migrations as one script for the SQL editor
 pnpm test              # vitest: URL rules, JD parsing, ingest integration
 
 cd services/ingest
@@ -84,6 +86,12 @@ the policy does not loosen (`docs/03-integration.md` §3.2).
 **Missing module during a bundle?** Add it to `apps/mobile/package.json` at the version in
 `node_modules/expo/bundledNativeModules.json`. Don't switch pnpm linkers — `.npmrc`
 explains why `node-linker=hoisted` breaks this layout.
+
+**Never ask the user for keys, and never read `.env`.** Secrets belong in their `.env`,
+EAS secrets or the worker host, and nowhere else. When config is suspect, have them run
+`pnpm doctor` (`scripts/doctor.mjs`) and share its output — it reports by shape, never by
+value. The anon key and Google client IDs are not secret (they ship in the bundle); the
+service role key is, and doctor fails hard if it ever appears with an `EXPO_PUBLIC_` prefix.
 
 **Verify with a real bundle.** `npx expo export --platform ios` catches resolution and
 babel problems that `tsc` cannot.
