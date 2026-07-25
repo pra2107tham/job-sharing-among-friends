@@ -174,37 +174,19 @@ if (!anonKey) {
   }
 }
 
-// -------------------------------------------------------- google client ids --
+// -------------------------------------------------------- google sign-in --
+// Google is configured inside the Supabase dashboard, not here — the app uses
+// Supabase's OAuth endpoint rather than talking to Google directly. So there is
+// nothing to validate locally; the only thing worth flagging is a leftover
+// client ID, which means someone followed older instructions.
 
-const GOOGLE_ID = /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
-const googleClients = [
-  ['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', 'Web application'],
-  ['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', 'iOS'],
-  ['EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID', 'Android'],
-];
-
-for (const [key, kind] of googleClients) {
-  const value = env[key];
-  if (!value) {
-    warn(
-      key,
-      'missing',
-      `Google Cloud Console → Credentials → Create OAuth client ID → ${kind}. ` +
-        'Sign-in will fail on that platform until it is set.',
-    );
-  } else if (!GOOGLE_ID.test(value)) {
-    fail(
-      key,
-      'wrong shape',
-      'Expected <digits>-<hash>.apps.googleusercontent.com — you may have pasted the client secret',
-    );
-  } else {
-    pass(key, `${kind} client ID`);
-  }
-}
-
-if (googleClients.every(([k]) => !env[k])) {
-  warn('Google sign-in', 'no client IDs configured at all', 'Nobody will be able to sign in yet');
+const staleGoogleKeys = Object.keys(env).filter((k) => /^EXPO_PUBLIC_GOOGLE_.*CLIENT_ID$/.test(k));
+if (staleGoogleKeys.length) {
+  warn(
+    'Google client IDs in .env',
+    `${staleGoogleKeys.length} set but unused`,
+    'Google is configured in the Supabase dashboard now (Authentication -> Providers -> Google). Safe to delete these lines.',
+  );
 }
 
 // ---------------------------------------------------- reachability + schema --
@@ -279,6 +261,29 @@ async function checkRemote() {
     );
   } else {
     pass('schema applied', `${expected.length} expected tables and views present`);
+  }
+
+  // Is Google actually enabled on the project? The settings endpoint is public
+  // and says which providers are on, which is the thing people forget.
+  try {
+    const settings = await fetch(`${url.replace(/\/$/, '')}/auth/v1/settings`, {
+      headers: { apikey: anonKey },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (settings.ok) {
+      const body = await settings.json();
+      if (body?.external?.google) {
+        pass('Google sign-in enabled', 'the project accepts Google');
+      } else {
+        fail(
+          'Google sign-in enabled',
+          'Google is not turned on for this project',
+          'Supabase dashboard -> Authentication -> Providers -> Google: enable it and paste the web client ID + secret',
+        );
+      }
+    }
+  } catch {
+    warn('Google sign-in enabled', 'could not read auth settings', undefined);
   }
 
   // ingest_jobs must NOT be reachable: RLS-enabled with no policies is how the

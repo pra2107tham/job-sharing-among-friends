@@ -1,5 +1,6 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as AuthSession from 'expo-auth-session';
+import { getQueryParams } from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
@@ -7,66 +8,81 @@ import { supabase } from './supabase';
 /**
  * Sign-in.
  *
- * Google goes through expo-auth-session rather than the native
- * @react-native-google-signin module. That module needs a custom dev build;
- * AuthSession works in Expo Go and on web with the same code. Revisit at M3,
- * when the share extension and the Android bubble force a dev build anyway —
- * native Google sign-in is a better gesture (one tap, no browser hop) and the
- * swap is contained to this file.
+ * Google goes through Supabase's OAuth endpoint in a browser rather than talking
+ * to Google directly. That is a deliberate trade:
  *
- * Apple is required by App Store review once any third-party sign-in is offered.
+ *   - The Google client ID and secret live in the Supabase dashboard, not in
+ *     this app. Setup drops from three OAuth clients to one, and no Google
+ *     credential ships in the bundle.
+ *   - It works in Expo Go. Talking to Google directly needs a custom URL scheme
+ *     as the redirect, which Google rejects for a Web client and which Expo Go
+ *     cannot provide anyway (it hands out `exp://…`).
+ *   - PKCE is handled by supabase-js, so there is no hand-rolled nonce.
+ *
+ * The cost is a browser hop instead of the native account picker. Swap to
+ * @react-native-google-signin at M3, when the share extension forces a dev build
+ * anyway — the change is contained to this file.
+ *
+ * Apple stays native because expo-apple-authentication returns an identity token
+ * directly, and Apple requires the native sheet for App Store review.
  */
 
 WebBrowser.maybeCompleteAuthSession();
 
-const GOOGLE_DISCOVERY = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-};
-
-function googleClientId(): string {
-  const id =
-    Platform.select({
-      ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-      android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-      default: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    }) ?? '';
-
-  if (!id) {
-    throw new Error(
-      'Missing Google client ID for this platform. See .env.example — you need three OAuth clients (iOS, Android, web) from the Google Cloud console.',
-    );
-  }
-  return id;
-}
-
 export type AuthOutcome = 'signed-in' | 'cancelled';
 
+/** Where Supabase sends the browser back to once Google is done. */
+function redirectUri(): string {
+  return AuthSession.makeRedirectUri({ scheme: 'jobdrop', path: 'auth-callback' });
+}
+
 export async function signInWithGoogle(): Promise<AuthOutcome> {
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'jobdrop' });
+  // On web the page itself navigates to Google and back; supabase-js picks the
+  // session out of the returned URL because detectSessionInUrl is on.
+  if (Platform.OS === 'web') {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) throw new Error(`Google sign-in failed: ${error.message}`);
+    return 'signed-in';
+  }
 
-  const request = new AuthSession.AuthRequest({
-    clientId: googleClientId(),
-    redirectUri,
-    scopes: ['openid', 'profile', 'email'],
-    // id_token is what Supabase verifies; the access token is not needed.
-    responseType: AuthSession.ResponseType.IdToken,
-    extraParams: { nonce: 'jobdrop' },
-  });
+  const redirectTo = redirectUri();
 
-  const result = await request.promptAsync(GOOGLE_DISCOVERY);
-  if (result.type !== 'success') return 'cancelled';
-
-  const idToken = result.params.id_token;
-  if (!idToken) throw new Error('Google did not return an identity token.');
-
-  const { error } = await supabase.auth.signInWithIdToken({
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    token: idToken,
-    nonce: 'jobdrop',
+    // We open the browser ourselves so we can await the result and read the
+    // callback URL; letting supabase-js redirect would lose control of it.
+    options: { redirectTo, skipBrowserRedirect: true },
   });
   if (error) throw new Error(`Google sign-in failed: ${error.message}`);
-  return 'signed-in';
+  if (!data.url) throw new Error('Supabase did not return an authorization URL.');
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type !== 'success') return 'cancelled';
+
+  const { params, errorCode } = getQueryParams(result.url);
+  if (errorCode) throw new Error(`Google sign-in failed: ${errorCode}`);
+
+  // PKCE returns ?code=…; a project still on the implicit flow returns tokens
+  // in the fragment. Handle both so this does not break on either setting.
+  if (params.code) {
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
+    if (exchangeError) throw new Error(`Google sign-in failed: ${exchangeError.message}`);
+    return 'signed-in';
+  }
+
+  if (params.access_token && params.refresh_token) {
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: params.access_token,
+      refresh_token: params.refresh_token,
+    });
+    if (sessionError) throw new Error(`Google sign-in failed: ${sessionError.message}`);
+    return 'signed-in';
+  }
+
+  throw new Error('Google sign-in returned no session. Check the Supabase redirect allow list.');
 }
 
 export async function signInWithApple(): Promise<AuthOutcome> {

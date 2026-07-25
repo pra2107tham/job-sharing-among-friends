@@ -18,14 +18,13 @@ prints a secret, so its output is safe to share when you want help.
 
 Worth being precise, because most of this is not:
 
-| Value                            | Secret? | Why                                                                                                        |
-| -------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `EXPO_PUBLIC_SUPABASE_URL`       | No      | Public address of your project                                                                             |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY`  | No      | Ships inside the app bundle. Anyone with the app has it. **Row level security** is what protects your data |
-| `EXPO_PUBLIC_GOOGLE_*_CLIENT_ID` | No      | Also in the bundle by design                                                                               |
-| Google OAuth **client secret**   | **Yes** | Not needed by this app at all — mobile and web use PKCE. If you were given one, don't use it               |
-| `SUPABASE_SERVICE_ROLE_KEY`      | **Yes** | Bypasses every RLS policy. Only ever on the ingest worker's host                                           |
-| `DATABASE_URL` (hosted)          | **Yes** | Contains the database password                                                                             |
+| Value                           | Secret?              | Why                                                                                                        |
+| ------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `EXPO_PUBLIC_SUPABASE_URL`      | No                   | Public address of your project                                                                             |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | No                   | Ships inside the app bundle. Anyone with the app has it. **Row level security** is what protects your data |
+| Google OAuth client ID + secret | **Yes** (the secret) | Both go into the **Supabase dashboard**, never into this repo. The app never sees either one               |
+| `SUPABASE_SERVICE_ROLE_KEY`     | **Yes**              | Bypasses every RLS policy. Only ever on the ingest worker's host                                           |
+| `DATABASE_URL` (hosted)         | **Yes**              | Contains the database password                                                                             |
 
 The one mistake that actually hurts is putting a service role key anywhere with an
 `EXPO_PUBLIC_` prefix — that compiles it into the app and hands every user full read/write
@@ -47,12 +46,15 @@ on every table. `pnpm doctor` fails loudly on this specific case.
 cp .env.example .env
 ```
 
-Fill in:
+Fill in the only two values the app needs:
 
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://<your-ref>.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
+
+That is the whole client configuration. Google credentials go in the Supabase
+dashboard (step 3), not here.
 
 ## 2. Apply the schema
 
@@ -84,30 +86,44 @@ pnpm doctor      # checks the expected tables and views now exist
 
 ## 3. Google sign-in
 
-You need **three** OAuth clients because Google treats each platform separately.
+The app does not talk to Google directly — it uses Supabase's OAuth endpoint. So
+you need **one** OAuth client, and it is configured in the Supabase dashboard
+rather than in this repo. Nothing goes in `.env`.
 
-Google Cloud Console → **APIs & Services → Credentials**:
+**Google Cloud Console → APIs & Services:**
 
-1. Configure the **OAuth consent screen** first (External, add your own email as a test
-   user). You do not need verification for a friends-only app.
-2. **Create credentials → OAuth client ID** three times:
+1. **OAuth consent screen** — External. Add your own email under _Test users_. A
+   friends-only app never needs Google's verification review.
+2. **Credentials → Create credentials → OAuth client ID → Web application.**
+   Under _Authorised redirect URIs_ add exactly:
 
-| Type            | What it asks for        | Value                                              |
-| --------------- | ----------------------- | -------------------------------------------------- |
-| Web application | Authorised redirect URI | `https://<your-ref>.supabase.co/auth/v1/callback`  |
-| iOS             | Bundle ID               | `app.jobdrop.client` (from `apps/mobile/app.json`) |
-| Android         | Package name + SHA-1    | `app.jobdrop.client`, SHA-1 from `eas credentials` |
+   ```
+   https://<your-ref>.supabase.co/auth/v1/callback
+   ```
 
-3. Put the three client IDs in `.env` as `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`,
-   `..._IOS_CLIENT_ID`, `..._ANDROID_CLIENT_ID`.
-4. In Supabase → **Authentication → Providers → Google**: enable it, and paste the **web**
-   client ID and its client secret **there** (that secret stays in Supabase, never in
-   `.env`).
+3. Copy the **client ID** and **client secret**.
 
-Apple sign-in is only needed when you submit to the App Store; skip it until then.
+**Supabase dashboard → Authentication → Providers → Google:**
+
+4. Enable it, paste the client ID and secret, save.
+
+**Supabase dashboard → Authentication → URL Configuration → Redirect URLs**, add:
+
+```
+jobdrop://auth-callback
+exp://127.0.0.1:8081/--/auth-callback
+http://localhost:8081
+```
+
+The first is the installed app, the second is Expo Go during development (your
+LAN IP may differ — the terminal prints the exact `exp://` URL when you run
+`pnpm start`), the third is the web build.
+
+Apple sign-in needs a paid Apple Developer account and only matters when you
+submit to the App Store. Skip it — the button hides itself off iOS.
 
 ```bash
-pnpm doctor      # confirms all three client IDs have the right shape
+pnpm doctor      # confirms Google is actually enabled on your project
 ```
 
 ## 4. The ingest worker
@@ -143,8 +159,11 @@ through EAS, which compiles iOS in the cloud so you do not need a Mac:
 npx eas build --profile development --platform android
 ```
 
-Set the same `EXPO_PUBLIC_*` values as **EAS environment variables** so cloud builds get
-them — `.env` is not uploaded.
+Set the same two `EXPO_PUBLIC_*` values as **EAS environment variables** so cloud builds
+get them — `.env` is not uploaded.
+
+Expo Go works for everything in M0-M2. A development build is only needed at M3, when the
+Android bubble and the iOS Share Extension add native code.
 
 ---
 

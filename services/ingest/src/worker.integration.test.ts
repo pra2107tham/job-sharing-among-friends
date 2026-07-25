@@ -1,5 +1,5 @@
 import pg from 'pg';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { runOnce, type Fetcher } from './worker.ts';
 
 /**
@@ -86,6 +86,14 @@ afterAll(async () => {
 });
 
 describe.skipIf(!available)('ingest worker against the real schema', () => {
+  // The worker claims the OLDEST queued job, not "the one this test just made".
+  // Without this the suite passes or fails depending on whether the SQL suites
+  // ran first and left work in the queue — which is exactly the kind of
+  // order-dependent green that hides real breakage.
+  beforeEach(async () => {
+    await pool.query('delete from ingest_jobs');
+  });
+
   it('turns a queued share into an enriched job_post', async () => {
     const url = `https://jobs.northwind.test/roles/${Date.now()}`;
     const { jobPostId } = await seedShare(url);

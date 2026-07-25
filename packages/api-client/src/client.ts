@@ -45,6 +45,10 @@ export function createJobDropClient({
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl,
+      // PKCE, so the OAuth callback returns a code we exchange rather than
+      // tokens in a URL fragment. Required by exchangeCodeForSession in
+      // apps/mobile/src/lib/auth.ts, and the safer flow on mobile regardless.
+      flowType: 'pkce',
     },
   });
 }
