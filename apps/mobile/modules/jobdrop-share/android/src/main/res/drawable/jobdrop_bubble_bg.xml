@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- accent500 from packages/contracts/src/tokens.json. Kept in sync by hand;
+     Android resources cannot read the token file. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+  <solid android:color="#2A7D62" />
+  <stroke android:width="2dp" android:color="#E8F3EE" />
+</shape>

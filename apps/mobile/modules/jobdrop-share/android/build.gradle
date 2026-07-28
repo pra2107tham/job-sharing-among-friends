@@ -1,0 +1,41 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+group = 'app.jobdrop.share'
+version = '0.1.0'
+
+android {
+  namespace 'app.jobdrop.share'
+  compileSdk safeExtGet('compileSdkVersion', 36)
+
+  defaultConfig {
+    minSdk safeExtGet('minSdkVersion', 24)
+    targetSdk safeExtGet('targetSdkVersion', 36)
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = '17'
+  }
+}
+
+def safeExtGet(prop, fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  implementation "org.jetbrains.kotlin:kotlin-stdlib:${safeExtGet('kotlinVersion', '2.0.21')}"
+
+  // WorkManager retries an upload after the process dies or the network comes
+  // back. Without it a share captured offline would only send if the user
+  // happened to open the app.
+  implementation 'androidx.work:work-runtime-ktx:2.9.1'
+
+  // The queue holds a bearer token, so it is not going in plain SharedPreferences.
+  implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+}

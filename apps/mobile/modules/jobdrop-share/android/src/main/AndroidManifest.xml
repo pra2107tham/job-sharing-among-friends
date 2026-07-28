@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Declared here so the module is self-contained; the config plugin adds the
+       permissions to the host app, which is what actually grants them. -->
+  <application>
+    <service
+      android:name=".BubbleService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Floating share bubble the user explicitly enables, so a job link can be shared from any app without switching to JobDrop." />
+    </service>
+  </application>
+</manifest>

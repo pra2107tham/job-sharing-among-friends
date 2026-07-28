@@ -7,8 +7,13 @@ build/
 # expo
 .expo/
 web-build/
-ios/
-android/
+# Prebuild output only. These MUST stay anchored with a leading slash: bare
+# `ios/` and `android/` match any directory with that name at any depth, which
+# silently excluded every Kotlin and Swift source in
+# apps/mobile/modules/jobdrop-share/. The M3 native code was written, passed
+# review, and was not in the repository.
+/apps/mobile/android/
+/apps/mobile/ios/
 *.jks
 *.p8
 *.p12

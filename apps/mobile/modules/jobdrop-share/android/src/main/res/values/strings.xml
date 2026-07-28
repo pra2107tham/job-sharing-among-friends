@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="jobdrop_bubble_glyph">JD</string>
+  <string name="jobdrop_bubble_description">JobDrop share bubble. Drag a job link onto it.</string>
+  <string name="jobdrop_dismiss_hint">Drop here to hide for 4 hours</string>
+</resources>
