@@ -32,17 +32,47 @@ Only **two values** ever go in `.env`. Everything else lives in a dashboard.
 
 ### 1b. Google sign-in — one OAuth client, configured in Supabase
 
-The app never talks to Google directly, so no Google credential ships in the bundle.
+The app never talks to Google directly. It uses Supabase's OAuth endpoint, so Google only
+ever sees a **Web** client and no Google credential ships in the app bundle.
 
-1. Google Cloud Console → **OAuth consent screen** → External. Add your own email under
-   _Test users_. A friends-only app never needs Google's verification review.
-2. **Credentials → Create credentials → OAuth client ID → Web application.**
-   Under _Authorised redirect URIs_ add exactly:
-   ```
-   https://<your-ref>.supabase.co/auth/v1/callback
-   ```
-3. Copy the client ID and client secret.
-4. **Supabase → Authentication → Providers → Google** → enable, paste both, save.
+**First, copy the callback URL** rather than typing it. Supabase → **Authentication →
+Providers → Google** → expand. It shows a _Callback URL (for OAuth)_:
+
+```
+https://<your-ref>.supabase.co/auth/v1/callback
+```
+
+**Then, in Google Cloud Console** (console.cloud.google.com), create or pick a project:
+
+1. **Consent screen** — _APIs & Services → OAuth consent screen_. Newer accounts show this
+   as _Google Auth Platform → Branding / Audience_; it is the same thing.
+   - User type **External**
+   - App name `JobDrop`, your email for support and developer contact
+   - **Add no scopes.** Supabase requests `openid`, `email` and `profile` itself
+2. **Credentials → Create credentials → OAuth client ID**
+   - Application type: **Web application**. Not iOS, not Android — the flow terminates on
+     Supabase's server, so a web client is the correct and only one needed
+   - _Authorised redirect URIs_: paste the callback URL from above
+   - _Authorised JavaScript origins_: leave empty; the exchange is server-side
+   - Create, then copy the **client ID** and **client secret**
+3. **Supabase → Authentication → Providers → Google** → enable, paste both, save
+
+Verify without leaving the terminal:
+
+```bash
+pnpm doctor      # reports "Google sign-in enabled — the project accepts Google"
+```
+
+#### Publish the consent screen, or maintain a list
+
+While the consent screen is in **Testing**, only addresses on the test-user list can sign
+in, capped at 100. Every friend has to be added by hand before they can join — friction in
+exactly the wrong place.
+
+JobDrop only asks for basic identity scopes, and Google's verification review applies to
+_sensitive_ and _restricted_ scopes only. So **Publish app** costs nothing here: no review,
+no unverified-app warning, and anyone with an invite link can sign in. Publish it unless
+you deliberately want a closed list.
 
 ### 1c. Redirect allow list
 
